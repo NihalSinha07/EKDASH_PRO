@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EkDash — Shipment Performance Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@700;800&family=Dancing+Script:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg:#f8f6f0;--bg2:#f2efe8;--surface:#ffffff;--surface2:#faf8f3;--surface3:#f0ece0;
+  --border:#e8dfc0;--gold:#c9a84c;--gold2:#b8942e;--gold3:#e8c860;--gold-glow:rgba(201,168,76,0.35);
+  --gold-soft:rgba(201,168,76,0.12);--green:#1a7a4a;--green-bg:rgba(26,122,74,0.08);
+  --red:#c0283a;--red-bg:rgba(192,40,58,0.08);--yellow:#b07800;--yellow-bg:rgba(176,120,0,0.08);
+  --purple:#6040c0;--purple-bg:rgba(96,64,192,0.08);--blue:#2050c0;--blue-bg:rgba(32,80,192,0.08);
+  --orange:#c06010;--orange-bg:rgba(192,96,16,0.08);--text:#1a1608;--text2:#3a3018;
+  --muted:#907850;--muted2:#b09060;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='4' height='4' fill='%23f8f6f0'/%3E%3Cpath d='M0 0L4 4M4 0L0 4' stroke='%23e8e0c8' stroke-width='0.3' opacity='0.4'/%3E%3C/svg%3E");pointer-events:none;z-index:0}
+
+header{position:sticky;top:0;z-index:200;padding:0 48px;height:70px;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.96);backdrop-filter:blur(20px);border-bottom:1px solid var(--gold);box-shadow:0 2px 0 rgba(201,168,76,0.2),0 4px 32px rgba(201,168,76,0.08)}
+.logo{display:flex;align-items:center;gap:16px}
+.logo-icon{width:42px;height:42px;background:linear-gradient(145deg,#e8c860 0%,#c9a84c 40%,#8a6010 100%);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 0 20px rgba(201,168,76,0.5),0 4px 16px rgba(201,168,76,0.3),inset 0 1px 0 rgba(255,255,255,0.4);border:1px solid rgba(201,168,76,0.6)}
+.logo-text{display:flex;flex-direction:column;gap:2px}
+.logo-main{font-family:'Playfair Display',serif;font-size:26px;font-weight:800;letter-spacing:1px;color:var(--gold2);line-height:1}
+.logo-sub{font-family:'Dancing Script',cursive;font-size:13px;color:var(--gold);background:linear-gradient(90deg,#c9a84c,#e8c860,#c9a84c);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shimmer 3s linear infinite}
+@keyframes shimmer{0%{background-position:0% center}100%{background-position:200% center}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes countUp{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
+@keyframes goldPulse{0%,100%{box-shadow:0 0 0 1px rgba(201,168,76,.2),0 0 12px rgba(201,168,76,.15),0 4px 20px rgba(0,0,0,.06)}50%{box-shadow:0 0 0 1px rgba(201,168,76,.5),0 0 28px rgba(201,168,76,.3),0 4px 20px rgba(0,0,0,.06)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.header-right{display:flex;align-items:center;gap:14px}
+.header-file{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted2);background:var(--surface2);padding:7px 14px;border-radius:6px;border:1px solid var(--border);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.header-file.loaded{color:var(--gold2);border-color:rgba(201,168,76,.5);background:rgba(201,168,76,.06);box-shadow:0 0 12px rgba(201,168,76,.15)}
+
+main{position:relative;z-index:1;padding:32px 48px 60px;max-width:1600px;margin:0 auto}
+
+.upload-zone{border:1.5px solid var(--gold);border-radius:20px;padding:100px 40px;text-align:center;cursor:pointer;transition:all .4s cubic-bezier(.4,0,.2,1);background:var(--surface);position:relative;overflow:hidden;box-shadow:0 0 30px rgba(201,168,76,.15),0 8px 40px rgba(0,0,0,.06);animation:goldPulse 3s ease-in-out infinite}
+.upload-zone:hover{border-color:var(--gold3);transform:translateY(-3px)}
+.upload-icon{font-size:64px;margin-bottom:24px;display:block;animation:float 3s ease-in-out infinite}
+.upload-title{font-family:'Playfair Display',serif;font-size:30px;font-weight:800;margin-bottom:12px;color:var(--gold2)}
+.upload-sub{color:var(--muted);font-size:14px;margin-bottom:32px;line-height:1.8}
+
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;border-radius:8px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:700;font-size:13px;transition:all .25s;letter-spacing:.5px;text-decoration:none;position:relative;overflow:hidden}
+.btn-primary{background:linear-gradient(135deg,#e8c860 0%,#c9a84c 50%,#a07828 100%);color:#1a1608;font-weight:800;letter-spacing:1px;text-transform:uppercase;font-size:11px;box-shadow:0 4px 20px rgba(201,168,76,.4)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(201,168,76,.5)}
+.btn-secondary{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}
+.btn-secondary:hover{border-color:var(--gold);color:var(--gold2)}
+.btn-green{background:linear-gradient(135deg,#1a7a4a,#0ec87a);color:#fff;font-weight:800}
+.btn-ppt{background:linear-gradient(135deg,#e8c860,#c9a84c,#a07828);color:#1a1608;font-weight:800}
+.btn-sm{padding:8px 16px;font-size:11px;border-radius:6px}
+#fileInput{display:none}
+
+.loading-section{display:none;text-align:center;padding:100px 40px}
+.loader-wrap{position:relative;width:72px;height:72px;margin:0 auto 28px}
+.loader-ring{position:absolute;inset:0;border:2px solid transparent;border-radius:50%}
+.loader-ring:nth-child(1){border-top-color:var(--gold);animation:spin 1.2s linear infinite}
+.loader-ring:nth-child(2){inset:8px;border-right-color:var(--gold3);animation:spin .9s linear infinite reverse}
+.loader-ring:nth-child(3){inset:16px;border-bottom-color:var(--gold2);animation:spin .7s linear infinite}
+.loading-text{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:var(--gold2);margin-bottom:10px}
+.loading-sub{color:var(--muted2);font-size:11px;font-family:'Space Mono',monospace}
+
+.dashboard{display:none}
+.section-label{font-family:'Playfair Display',serif;font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--gold2);margin-bottom:16px;margin-top:36px;display:flex;align-items:center;gap:14px}
+.section-label::before{content:'';width:32px;height:1px;background:linear-gradient(90deg,transparent,var(--gold));flex-shrink:0}
+.section-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--gold),transparent)}
+
+.global-filters{background:var(--surface);border:1.5px solid var(--gold);border-radius:14px;padding:18px 24px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:24px;box-shadow:0 0 20px rgba(201,168,76,.1)}
+.filter-label{font-family:'Space Mono',monospace;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.filter-group{display:flex;align-items:center;gap:8px}
+.filter-divider{width:1px;height:28px;background:var(--gold);opacity:.25}
+select,input[type="date"],input[type="text"]{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:all .2s}
+select:focus,input[type="date"]:focus,input[type="text"]:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,168,76,.15)}
+.clear-btn{background:transparent;border:1px solid var(--border);color:var(--muted2);padding:8px 16px;border-radius:8px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s}
+.clear-btn:hover{border-color:var(--red);color:var(--red)}
+.filter-active-badge{background:rgba(201,168,76,.1);color:var(--gold2);border:1px solid rgba(201,168,76,.4);padding:4px 12px;border-radius:20px;font-size:9px;font-family:'Space Mono',monospace;display:none;letter-spacing:1px}
+
+.stats-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:16px;margin-bottom:28px}
+@media(max-width:1200px){.stats-grid{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:700px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
+
+.stat-card{background:var(--surface);border:1.5px solid var(--gold);border-radius:16px;padding:22px 18px;position:relative;overflow:hidden;cursor:default;transition:all .3s cubic-bezier(.4,0,.2,1);box-shadow:0 0 20px rgba(201,168,76,.15),0 4px 20px rgba(0,0,0,.05)}
+.stat-card::before{content:'';position:absolute;top:-1px;left:15%;right:15%;height:2px;background:linear-gradient(90deg,transparent,rgba(255,220,80,.9),transparent);border-radius:2px}
+.stat-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;border-radius:0 0 16px 16px}
+.stat-card:hover{transform:translateY(-4px);box-shadow:0 0 40px rgba(201,168,76,.3),0 16px 40px rgba(0,0,0,.08)}
+.c-total::after{background:linear-gradient(90deg,var(--gold),var(--gold3))}
+.c-del::after{background:linear-gradient(90deg,#0a6a3a,var(--green))}
+.c-rto::after{background:linear-gradient(90deg,#a01828,var(--red))}
+.c-open::after{background:linear-gradient(90deg,#907000,var(--yellow))}
+.c-fac::after{background:linear-gradient(90deg,#1040a0,var(--blue))}
+.c-tat::after{background:linear-gradient(90deg,#5030a0,var(--purple))}
+.c-speed::after{background:linear-gradient(90deg,#a04808,var(--orange))}
+.stat-icon{font-size:20px;margin-bottom:12px;opacity:.85}
+.stat-label{font-family:'Space Mono',monospace;font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.stat-value{font-family:'Playfair Display',serif;font-size:36px;font-weight:800;line-height:1;margin-bottom:6px;letter-spacing:-1px}
+.c-total .stat-value{color:var(--gold2)}
+.c-del .stat-value{color:var(--green)}
+.c-rto .stat-value{color:var(--red)}
+.c-open .stat-value{color:var(--yellow)}
+.c-fac .stat-value{color:var(--blue)}
+.c-tat .stat-value{color:var(--purple)}
+.c-speed .stat-value{color:var(--orange)}
+.stat-sub{font-size:10px;color:var(--muted2);font-family:'Space Mono',monospace;letter-spacing:.5px}
+.stat-value.pop{animation:countUp .6s cubic-bezier(.34,1.56,.64,1) both}
+
+.breakdown-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:8px}
+@media(max-width:900px){.breakdown-grid{grid-template-columns:1fr}}
+
+.bd-card,.deep-card{background:var(--surface);border:1.5px solid var(--gold);border-radius:16px;padding:22px;position:relative;overflow:hidden;box-shadow:0 0 20px rgba(201,168,76,.12),0 4px 24px rgba(0,0,0,.05);transition:all .3s}
+.bd-card:hover,.deep-card:hover{box-shadow:0 0 40px rgba(201,168,76,.2),0 8px 32px rgba(0,0,0,.07);border-color:var(--gold3);transform:translateY(-2px)}
+.bd-title,.deep-title{font-family:'Playfair Display',serif;font-size:14px;font-weight:700;margin-bottom:18px;display:flex;align-items:center;gap:8px;color:var(--gold2);letter-spacing:.5px}
+
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.bar-lbl{font-size:10px;color:var(--muted2);width:70px;flex-shrink:0;font-family:'Space Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-track{flex:1;height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;border:1px solid rgba(201,168,76,.1)}
+.bar-fill{height:100%;border-radius:3px;transition:width 1.4s cubic-bezier(.4,0,.2,1)}
+.bar-val{font-size:10px;font-family:'Space Mono',monospace;width:40px;text-align:right;color:var(--text2)}
+.bar-sub{font-size:9px;color:var(--muted);margin:-6px 0 8px 80px;font-family:'Space Mono',monospace}
+
+.deep-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:8px}
+@media(max-width:1100px){.deep-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:700px){.deep-grid{grid-template-columns:1fr}}
+
+.pay-split{display:flex;gap:12px}
+.pay-block{flex:1;background:var(--surface2);border-radius:10px;padding:16px;text-align:center;border:1px solid var(--gold);transition:all .2s}
+.pay-block:hover{box-shadow:0 0 24px rgba(201,168,76,.2)}
+.pay-val{font-family:'Playfair Display',serif;font-size:30px;font-weight:800;line-height:1;margin-bottom:4px}
+.pay-label{font-size:8px;color:var(--muted);font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;font-family:'Space Mono',monospace}
+.pay-sub{font-size:9px;color:var(--muted2);font-family:'Space Mono',monospace}
+
+.mini-tbl{width:100%;border-collapse:collapse;font-size:11px}
+.mini-tbl th{text-align:left;font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);padding:7px 8px;border-bottom:1px solid var(--gold);font-family:'Space Mono',monospace}
+.mini-tbl td{padding:8px;border-bottom:1px solid rgba(201,168,76,.1);font-family:'Space Mono',monospace;font-size:10px;color:var(--text2)}
+.mini-tbl tr:last-child td{border-bottom:none}
+.mini-tbl tr:hover td{background:rgba(201,168,76,.04);color:var(--text)}
+
+.export-bar{background:var(--surface);border:1.5px solid var(--gold);border-radius:14px;padding:20px 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:8px}
+.export-label{font-family:'Playfair Display',serif;font-size:20px;font-weight:800;color:var(--gold2)}
+.export-sub{font-size:10px;color:var(--muted2);margin-top:2px;font-family:'Space Mono',monospace}
+.export-btns{display:flex;gap:10px;flex-wrap:wrap}
+
+.table-section{background:var(--surface);border:1.5px solid var(--gold);border-radius:16px;overflow:hidden;margin-bottom:40px;box-shadow:0 0 30px rgba(201,168,76,.12),0 8px 40px rgba(0,0,0,.06)}
+.table-toolbar{padding:18px 24px;border-bottom:1px solid rgba(201,168,76,.3);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:linear-gradient(180deg,rgba(201,168,76,.04) 0%,transparent 100%)}
+.table-title{font-family:'Playfair Display',serif;font-size:16px;font-weight:700;color:var(--gold2)}
+.tid-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tag-count{background:rgba(201,168,76,.1);color:var(--gold2);border:1px solid rgba(201,168,76,.4);padding:3px 10px;border-radius:20px;font-size:10px;font-family:'Space Mono',monospace}
+.table-wrap{overflow-x:auto;max-height:480px;overflow-y:auto}
+.table-wrap::-webkit-scrollbar{width:5px;height:5px}
+.table-wrap::-webkit-scrollbar-track{background:var(--surface2)}
+.table-wrap::-webkit-scrollbar-thumb{background:rgba(201,168,76,.3);border-radius:3px}
+table{width:100%;border-collapse:collapse}
+thead th{background:linear-gradient(180deg,rgba(201,168,76,.08),rgba(201,168,76,.03));padding:12px 14px;text-align:left;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);position:sticky;top:0;z-index:2;white-space:nowrap;cursor:pointer;user-select:none;border-bottom:1px solid var(--gold);transition:color .2s;font-family:'Space Mono',monospace}
+thead th:hover{color:var(--gold2)}
+tbody tr{border-bottom:1px solid rgba(201,168,76,.06);transition:background .15s}
+tbody tr:hover{background:rgba(201,168,76,.04)}
+tbody td{padding:11px 14px;white-space:nowrap;font-family:'Space Mono',monospace;font-size:10px;color:var(--text2)}
+tbody td:first-child{color:var(--gold2);font-weight:700}
+
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;font-family:'Space Mono',monospace}
+.badge-del{background:rgba(26,122,74,.1);color:var(--green);border:1px solid rgba(26,122,74,.25)}
+.badge-rto{background:rgba(192,40,58,.1);color:var(--red);border:1px solid rgba(192,40,58,.25)}
+.badge-open{background:rgba(176,120,0,.1);color:var(--yellow);border:1px solid rgba(176,120,0,.25)}
+.badge-true{background:rgba(32,80,192,.1);color:var(--blue);border:1px solid rgba(32,80,192,.25)}
+.badge-false{background:rgba(96,80,40,.08);color:var(--muted);border:1px solid rgba(96,80,40,.15)}
+.badge-intat{background:rgba(26,122,74,.1);color:var(--green);border:1px solid rgba(26,122,74,.25)}
+.badge-breached{background:rgba(192,40,58,.1);color:var(--red);border:1px solid rgba(192,40,58,.25)}
+
+.pagination{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-top:1px solid rgba(201,168,76,.2)}
+.pg-info{font-size:10px;color:var(--muted2);font-family:'Space Mono',monospace}
+.pg-btns{display:flex;gap:6px}
+.pg-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted2);padding:6px 12px;border-radius:6px;cursor:pointer;font-family:'Space Mono',monospace;font-size:10px;transition:all .2s}
+.pg-btn:hover:not(:disabled){border-color:var(--gold);color:var(--gold2)}
+.pg-btn:disabled{opacity:.3;cursor:not-allowed}
+.pg-btn.active{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;border-color:var(--gold);font-weight:700}
+
+/* Diagnostic Modal */
+.diag-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);z-index:1000;display:none;align-items:center;justify-content:center}
+.diag-overlay.active{display:flex}
+.diag-box{background:var(--surface);border:1.5px solid var(--gold);border-radius:18px;padding:32px;max-width:620px;width:92%;max-height:85vh;overflow-y:auto;box-shadow:0 0 60px rgba(201,168,76,0.3),0 20px 60px rgba(0,0,0,0.25);animation:fadeUp .3s ease both;position:relative}
+.diag-box::-webkit-scrollbar{width:4px}.diag-box::-webkit-scrollbar-thumb{background:rgba(201,168,76,.3);border-radius:2px}
+.diag-header{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+.diag-title{font-family:'Playfair Display',serif;font-size:22px;font-weight:800;color:var(--gold2)}
+.diag-meta{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:6px}
+.diag-cols{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted2);background:var(--surface2);padding:8px 12px;border-radius:6px;margin-bottom:18px;word-break:break-all;line-height:1.7;border:1px solid var(--border)}
+.diag-section-label{font-family:'Space Mono',monospace;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.diag-row{padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:8px;line-height:1.6;font-family:'DM Sans',sans-serif}
+.diag-error{background:rgba(192,40,58,.08);border:1px solid rgba(192,40,58,.25);color:var(--red)}
+.diag-warn{background:rgba(176,120,0,.08);border:1px solid rgba(176,120,0,.25);color:var(--yellow)}
+.diag-info{background:rgba(26,122,74,.07);border:1px solid rgba(26,122,74,.2);color:var(--green)}
+.diag-actions{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
+
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);z-index:999;display:none;align-items:center;justify-content:center}
+.modal-overlay.active{display:flex}
+.modal-box{background:var(--surface);border:1.5px solid var(--gold);border-radius:18px;padding:32px;max-width:480px;width:90%;box-shadow:0 0 60px rgba(201,168,76,0.3),0 20px 60px rgba(0,0,0,0.2);animation:fadeUp .3s ease both;position:relative}
+.modal-close{position:absolute;top:14px;right:16px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);transition:color .2s}
+.modal-close:hover{color:var(--red)}
+.modal-icon{font-size:36px;margin-bottom:10px}
+.modal-title{font-family:'Playfair Display',serif;font-size:20px;font-weight:800;color:var(--gold2);margin-bottom:6px}
+.modal-subtitle{font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:1px;margin-bottom:18px}
+.modal-formula{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-family:'Space Mono',monospace;font-size:12px;color:var(--text2);margin-bottom:14px;border-left:3px solid var(--gold)}
+.modal-desc{font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:12px}
+.modal-example{background:rgba(201,168,76,0.06);border:1px dashed var(--gold);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--muted);font-family:'Space Mono',monospace}
+.stat-label{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+.stat-label:hover{color:var(--gold2)}
+
+.reset-fab{position:fixed;bottom:28px;right:28px;z-index:200;display:none;background:var(--surface);border:1px solid var(--gold);color:var(--gold2);padding:10px 20px;border-radius:10px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;transition:all .2s;box-shadow:0 0 20px rgba(201,168,76,.2),0 8px 32px rgba(0,0,0,.1)}
+.reset-fab:hover{box-shadow:0 0 32px rgba(201,168,76,.35)}
+
+.anim-0{animation:fadeUp .5s ease both}
+.anim-1{animation:fadeUp .5s .07s ease both}
+.anim-2{animation:fadeUp .5s .14s ease both}
+.anim-3{animation:fadeUp .5s .21s ease both}
+.anim-4{animation:fadeUp .5s .28s ease both}
+.anim-5{animation:fadeUp .5s .35s ease both}
+.anim-6{animation:fadeUp .5s .42s ease both}
+.anim-7{animation:fadeUp .5s .49s ease both}
+.anim-8{animation:fadeUp .5s .56s ease both}
+
+@media(max-width:700px){header,main{padding-left:16px;padding-right:16px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">📦</div>
+    <div class="logo-text">
+      <div class="logo-main">EkDash</div>
+      <div class="logo-sub">by team Supriya</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="header-file" id="headerFile">No file loaded</div>
+    <button class="btn btn-secondary btn-sm" id="resetFab" style="display:none;" onclick="resetTool()">🔄 New File</button>
+  </div>
+</header>
+
+<main>
+
+<div id="uploadSection">
+  <div class="upload-zone" id="uploadZone">
+    <span class="upload-icon">🗂️</span>
+    <div class="upload-title">Drop your Ekart CSV here</div>
+    <div class="upload-sub">Raw CSV / Excel supported — CONVERSION, FAC, TAT, SPEED, Month auto-calculated<br>Drag & drop or click to browse</div>
+    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">📂 Choose CSV / Excel File</button>
+    <input type="file" id="fileInput" accept=".csv,.CSV,.xlsx,.xls">
+  </div>
+</div>
+
+<div id="loadingSection" class="loading-section">
+  <div class="loader-wrap">
+    <div class="loader-ring"></div><div class="loader-ring"></div><div class="loader-ring"></div>
+  </div>
+  <div class="loading-text">Processing your data...</div>
+  <div class="loading-sub" id="loadingStatus">Parsing file...</div>
+</div>
+
+<div id="dashboard" class="dashboard">
+
+  <div class="section-label anim-0">🔧 Dashboard Filters</div>
+  <div class="global-filters anim-1">
+    <div class="filter-group">
+      <span class="filter-label">📅 PH_IN Date Range</span>
+      <select id="dateFrom" onchange="applyGlobalFilters()" style="min-width:110px">
+        <option value="">From Date</option>
+      </select>
+      <span style="color:var(--muted);font-size:12px;">to</span>
+      <select id="dateTo" onchange="applyGlobalFilters()" style="min-width:110px">
+        <option value="">To Date</option>
+      </select>
+    </div>
+    <div class="filter-divider"></div>
+    <div class="filter-group">
+      <span class="filter-label">💳 Payment</span>
+      <select id="payFilter" onchange="applyGlobalFilters()">
+        <option value="">All</option>
+        <option value="COD">COD (incl. POS)</option>
+        <option value="PREPAID">Prepaid</option>
+      </select>
+    </div>
+    <div class="filter-divider"></div>
+    <div class="filter-group">
+      <span class="filter-label">🌍 Zone</span>
+      <select id="zoneFilter" onchange="applyGlobalFilters()">
+        <option value="">All Zones</option>
+      </select>
+    </div>
+    <div class="filter-divider"></div>
+    <div class="filter-group">
+      <span class="filter-label">🏷️ Code</span>
+      <select id="codeFilter" onchange="applyGlobalFilters()">
+        <option value="">All Codes</option>
+      </select>
+    </div>
+    <button class="clear-btn" onclick="clearGlobalFilters()">✕ Clear</button>
+    <span class="filter-active-badge" id="activeFilterBadge">Filters Active</span>
+  </div>
+
+  <div class="section-label anim-2">📊 Overview Summary</div>
+  <div class="stats-grid" id="statsGrid"></div>
+
+  <div class="section-label anim-3">📈 Breakdown Analysis</div>
+  <div class="breakdown-grid">
+    <div class="bd-card anim-4"><div class="bd-title">🔄 Conversion Split</div><div id="convBars"></div></div>
+    <div class="bd-card anim-4"><div class="bd-title">📅 Month-wise Performance</div><div id="monthBars"></div></div>
+    <div class="bd-card anim-5"><div class="bd-title">⚡ Speed Distribution (days)</div><div id="speedBars"></div></div>
+
+  </div>
+
+  <div class="section-label anim-6">🔬 Deep Dive Analysis</div>
+  <div class="deep-grid">
+
+    <div class="deep-card anim-7">
+      <div class="deep-title">💳 COD vs Prepaid</div>
+      <div class="pay-split" id="paymentSplit"></div>
+      <div style="margin-top:14px;" id="paymentBreakBars"></div>
+    </div>
+
+    <div class="deep-card anim-7">
+      <div class="deep-title">🌍 Zone-wise Performance
+        <select id="zoneMetric" onchange="renderZone(globalFiltered)" style="margin-left:auto;font-size:11px;padding:4px 8px;border-radius:6px;background:var(--surface2);border:1px solid var(--gold);color:var(--text2)">
+          <option value="table">Summary Table</option>
+          <option value="speed">Speed Distribution</option>
+        </select>
+      </div>
+      <div id="zoneTableWrap">
+        <table class="mini-tbl" id="zoneTable">
+          <thead><tr><th>Zone</th><th>Total</th><th>DEL%</th><th>RTO%</th><th>FAC%</th><th>INTAT%</th><th>Avg Speed</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="zoneSpeedWrap" style="display:none">
+        <div style="font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;margin-bottom:12px;letter-spacing:1px">AVG DAYS: PH-IN → FIRST OFD, PER ZONE</div>
+        <div id="zoneSpeedBars"></div>
+      </div>
+    </div>
+
+    <div class="deep-card anim-7">
+      <div class="deep-title">🏙️ Top 10 Cities
+        <select id="cityMetric" onchange="renderCity(globalFiltered)" style="margin-left:auto;font-size:11px;padding:4px 8px;border-radius:6px;background:var(--surface2);border:1px solid var(--gold);color:var(--text2)">
+          <option value="overall">Volume</option>
+          <option value="del">By DEL%</option>
+          <option value="fac">By FAC%</option>
+          <option value="rto">By RTO%</option>
+        </select>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="mini-tbl" id="cityTable">
+          <thead><tr><th>City</th><th>Volume</th><th>DEL%</th><th>RTO%</th><th>FAC%</th></tr></thead>
+          <tbody id="cityTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="deep-card anim-8">
+      <div class="deep-title">📮 Pincode-wise Performance</div>
+      <div style="margin-bottom:10px;">
+        <input type="text" id="pincodeSearch" placeholder="Search pincode..." style="width:100%" oninput="renderPincodeTable()">
+      </div>
+      <table class="mini-tbl" id="pincodeTable">
+        <thead><tr><th>Pincode</th><th>Total</th><th>DEL%</th><th>RTO%</th><th>FAC%</th><th>Open</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="deep-card anim-8">
+      <div class="deep-title">📦 Shipment Type Breakup</div>
+      <div id="shipTypeBars"></div>
+    </div>
+
+    <div class="deep-card anim-8">
+      <div class="deep-title">⚡ Avg Speed by Zone (ekart_lzn_flag)</div>
+      <div style="font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;margin-bottom:12px;letter-spacing:1px">AVG DAYS: First_OFD_date − PH_IN_date &nbsp;|&nbsp; BLANK OFD EXCLUDED</div>
+      <div id="lznSpeedBars"></div>
+      <div style="margin-top:14px;overflow-x:auto">
+        <table class="mini-tbl" id="lznSpeedTable">
+          <thead><tr>
+            <th>Zone (ekart_lzn_flag)</th>
+            <th>Total</th>
+            <th>OFD Available</th>
+            <th>Avg Speed (days)</th>
+            <th>Min</th>
+            <th>Max</th>
+          </tr></thead>
+          <tbody id="lznSpeedBody"></tbody>
+        </table>
+      </div>
+      <div id="lznDebug" style="margin-top:10px;font-size:9px;color:var(--muted);font-family:'Space Mono',monospace"></div>
+    </div>
+
+    <div class="deep-card anim-8">
+      <div class="deep-title">🏪 Seller Performance
+        <select id="sellerMetricFilter" onchange="renderSellerTable(globalFiltered)" style="margin-left:auto;font-size:11px;padding:4px 8px;border-radius:6px;background:var(--surface3);border:1px solid var(--border);color:var(--text)">
+          <option value="del">Top DEL%</option>
+          <option value="rto">Top RTO%</option>
+          <option value="volume">Top Volume</option>
+        </select>
+      </div>
+      <table class="mini-tbl" id="sellerTable">
+        <thead><tr><th>Seller</th><th>Total</th><th>DEL%</th><th>RTO%</th><th>FAC%</th><th>INTAT%</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="deep-card anim-8">
+      <div class="deep-title">🐢 TAT Breach Analysis</div>
+      <div id="tatBars"></div>
+    </div>
+
+  </div><!-- end deep-grid -->
+
+  <div class="section-label">🏭 PH Hub Performance Summary</div>
+  <div class="bd-card anim-8" style="margin-bottom:8px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px">
+      <div class="bd-title" style="margin-bottom:0">📦 PH-IN to PH-OUT Days Analysis (Top 10)</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <input type="text" id="phNameFilter" placeholder="Search PH name..." style="width:150px" oninput="renderPHSummary()">
+        <input type="text" id="phCityFilter" placeholder="Search city..." style="width:130px" oninput="renderPHSummary()">
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="mini-tbl" id="phTable">
+        <thead><tr><th>PH Name</th><th>City</th><th>Total</th><th>Avg Days</th><th>≤1 Day</th><th>2 Days</th><th>3 Days</th><th>4 Days</th><th>5+ Days</th><th>Max Days</th></tr></thead>
+        <tbody id="phTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section-label">📤 Export</div>
+  <div class="export-bar anim-8">
+    <div>
+      <div class="export-label">Download Report</div>
+      <div class="export-sub">Export filtered data with all calculated metrics</div>
+    </div>
+    <div class="export-btns">
+      <button class="btn btn-secondary btn-sm" onclick="exportCSV('summary')">📄 Summary CSV</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportCSV('tid')">📋 TID CSV</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportCSV('pincode')">📮 Pincode CSV</button>
+      <button class="btn btn-green btn-sm" onclick="exportExcel()">📊 Full Excel</button>
+    </div>
+  </div>
+
+  <div class="section-label">🔍 TID-level Detail</div>
+  <div class="table-section">
+    <div class="table-toolbar">
+      <div class="table-title">Shipment Records <span class="tag-count" id="recordCount"></span></div>
+      <div class="tid-filters">
+        <input type="text" id="searchInput" placeholder="Search TID / Seller..." style="width:180px" oninput="applyTidFilters()">
+        <select id="convFilter" onchange="applyTidFilters()">
+          <option value="">All Status</option>
+          <option value="DEL">DEL</option>
+          <option value="RTO">RTO</option>
+          <option value="OPEN">OPEN</option>
+        </select>
+        <select id="tatFilter" onchange="applyTidFilters()">
+          <option value="">All TAT</option>
+          <option value="INTAT">INTAT</option>
+          <option value="BREACHED">BREACHED</option>
+        </select>
+        <select id="facFilter" onchange="applyTidFilters()">
+          <option value="">All FAC</option>
+          <option value="TRUE">FAC ✓</option>
+          <option value="FALSE">FAC ✗</option>
+        </select>
+        <select id="monthFilter" onchange="applyTidFilters()">
+          <option value="">All Months</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortTable('vendor_tracking_id')">TID ↕</th>
+            <th onclick="sortTable('ext_seller_name')">Seller ↕</th>
+            <th onclick="sortTable('Month')">Month ↕</th>
+            <th onclick="sortTable('CONVERSION')">Status ↕</th>
+            <th onclick="sortTable('FAC')">FAC ↕</th>
+            <th onclick="sortTable('TAT')">TAT ↕</th>
+            <th onclick="sortTable('SPEED')">Speed ↕</th>
+            <th onclick="sortTable('payment_type')">Payment ↕</th>
+            <th onclick="sortTable('ekl_fin_zone')">Zone ↕</th>
+            <th onclick="sortTable('Dest_pincode')">Pincode ↕</th>
+            <th onclick="sortTable('destination_city')">Dest City ↕</th>
+            <th onclick="sortTable('PH_IN_date')">PH IN ↕</th>
+            <th onclick="sortTable('First_OFD_date')">First OFD ↕</th>
+            <th onclick="sortTable('shipped_lpd_date')">LPD ↕</th>
+            <th onclick="sortTable('Delivered_Date')">Delivered ↕</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <div class="pg-info" id="pageInfo"></div>
+      <div class="pg-btns" id="pageBtns"></div>
+    </div>
+  </div>
+
+</div><!-- end dashboard -->
+</main>
+
+<button class="reset-fab" id="resetFabFixed" onclick="resetTool()">🔄 New File</button>
+
+<!-- Diagnostic Modal -->
+<div class="diag-overlay" id="diagModal">
+  <div class="diag-box">
+    <div class="diag-header">
+      <span style="font-size:32px">🔍</span>
+      <div>
+        <div class="diag-title">File Diagnostic Report</div>
+        <div class="diag-meta" id="diagRowCount"></div>
+      </div>
+    </div>
+    <div class="diag-cols" id="diagColList"></div>
+    <div class="diag-section-label">Diagnostics</div>
+    <div id="diagBody"></div>
+    <div class="diag-actions">
+      <button class="btn btn-primary" onclick="closeDiagAndLoad()">⚡ Load Anyway</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('diagModal').classList.remove('active');resetTool()">🔄 Upload Different File</button>
+    </div>
+  </div>
+</div>
+
+<!-- Formula Modal -->
+<div class="modal-overlay" id="formulaModal" onclick="closeModal(event)">
+  <div class="modal-box">
+    <button class="modal-close" onclick="document.getElementById('formulaModal').classList.remove('active')">✕</button>
+    <div class="modal-icon" id="modalIcon"></div>
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-subtitle" id="modalSubtitle"></div>
+    <div class="modal-formula" id="modalFormula"></div>
+    <div class="modal-desc" id="modalDesc"></div>
+    <div class="modal-example" id="modalExample"></div>
+  </div>
+</div>
+
+<script>
+let rawData=[],globalFiltered=[],tidFiltered=[],pincodeData=[],phData=[];
+let sortCol='',sortDir=1,currentPage=1;
+const PAGE_SIZE=50;
+
+const uploadZone=document.getElementById('uploadZone');
+const fileInput=document.getElementById('fileInput');
+uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.style.borderColor='var(--gold3)'});
+uploadZone.addEventListener('dragleave',()=>{uploadZone.style.borderColor='var(--gold)'});
+uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.style.borderColor='var(--gold)';if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0])});
+fileInput.addEventListener('change',e=>{if(e.target.files[0])processFile(e.target.files[0])});
+
+function parseDate(val){
+  if(!val||!val.toString().trim())return null;
+  let s=val.toString().trim();
+  let d=new Date(s);
+  if(!isNaN(d))return d;
+  const p=s.split('/');
+  if(p.length===3){d=new Date(`${p[2].substring(0,4)}-${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}`);if(!isNaN(d))return d}
+  return null;
+}
+function fmtDate(d){return d?d.toISOString().slice(0,10):''}
+function daysDiff(d1,d2){if(!d1||!d2)return null;return Math.round(((d1-d2)/86400000)*10)/10}
+
+function calcConversion(r){
+  const t=(r.ekl_shipment_type||'').toLowerCase().trim();
+  const s=(r.shipment_current_status||'').toLowerCase().trim();
+  if(t==='forward'){if(s==='delivered'||s==='delivery_update'||s==='delivered_update')return'DEL';return'OPEN'}
+  if(t==='approved_rto'||s==='approved_rto')return'RTO';
+  return '';
+}
+function calcFAC(r){
+  const ofd=parseDate(r.First_OFD_date);const del=parseDate(r.Delivered_Date);
+  if(!ofd||!del)return '';
+  return fmtDate(ofd)===fmtDate(del)?'TRUE':'FALSE';
+}
+function calcTAT(r){
+  const ofd=parseDate(r.First_OFD_date);const lpd=parseDate(r.shipped_lpd_date);
+  const rto=parseDate(r.rto_created_date);const today=new Date();
+  if(ofd&&lpd)return ofd<=lpd?'INTAT':'BREACHED';
+  if(!ofd&&lpd){if(rto)return rto<=lpd?'INTAT':'BREACHED';return today<lpd?'INTAT':'BREACHED'}
+  return '';
+}
+function calcSpeed(r){
+  // Rule: if First_OFD_date is blank → Speed = blank
+  const ofdRaw = r.First_OFD_date;
+  if(!ofdRaw || ofdRaw.toString().trim() === '') return '';
+
+  const ofd = parseDate(ofdRaw);
+  const ph  = parseDate(r.PH_IN_date);
+  if(!ofd || !ph) return '';
+
+  // First_OFD_date − PH_IN_date (positive = OFD is after PH_IN, which is normal)
+  const diff = Math.round((ofd - ph) / 86400000);
+  // Clamp: must be 0–60 days to be realistic; anything outside = data issue, exclude
+  return (diff >= 0 && diff <= 60) ? diff : '';
+}
+function calcMonth(r){
+  const d=parseDate(r.PH_IN_date);if(!d)return '';
+  return d.toLocaleString('en',{month:'short'});
+}
+function calcPayment(r){
+  const p=(r.payment_type||r.payment_mode||'').toUpperCase().trim();
+  if(p==='COD'||p==='POS')return'COD';
+  if(p==='PREPAID'||p==='PPD'||p==='ONLINE')return'PREPAID';
+  if(p)return p;return'COD';
+}
+function autoCalc(data){
+  return data.map(r=>({...r,
+    CONVERSION:calcConversion(r),FAC:calcFAC(r),TAT:calcTAT(r),
+    SPEED:calcSpeed(r),Month:calcMonth(r),_payment:calcPayment(r),
+    _phDate:parseDate(r.PH_IN_date),_zone:r.ekart_lzn_flag||r.ekl_fin_zone||''
+  }));
+}
+
+function processFile(file){
+  document.getElementById('uploadSection').style.display='none';
+  document.getElementById('loadingSection').style.display='block';
+  document.getElementById('headerFile').textContent=file.name;
+  document.getElementById('headerFile').classList.add('loaded');
+  const statusEl=document.getElementById('loadingStatus');
+  const steps=['Reading file...','Calculating metrics...','Building dashboard...'];
+  let step=0;
+  const si=setInterval(()=>{step=Math.min(step+1,steps.length-1);statusEl.textContent=steps[step]},400);
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(ext==='xlsx'||ext==='xls'){
+    const reader=new FileReader();
+    reader.onload=function(e){
+      clearInterval(si);
+      try{
+        const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const jsonData=XLSX.utils.sheet_to_json(ws,{defval:''});
+        jsonData.forEach(row=>{Object.keys(row).forEach(k=>{if(row[k]instanceof Date)row[k]=row[k].toLocaleDateString('en-US')})});
+        rawData=autoCalc(jsonData);
+        setTimeout(()=>buildDashboard(),600);
+      }catch(err){alert('Error reading file.');resetTool()}
+    };
+    reader.readAsArrayBuffer(file);
+  }else{
+    Papa.parse(file,{header:true,skipEmptyLines:true,complete:function(results){
+      clearInterval(si);rawData=autoCalc(results.data);setTimeout(()=>buildDashboard(),600);
+    }});
+  }
+}
+
+function buildDashboard(){
+  // Run diagnostics first
+  const diag = runDiagnostics(rawData);
+  if(diag.issues.length > 0){
+    showDiagModal(diag);
+    return;
+  }
+  launchDashboard();
+}
+
+function launchDashboard(){
+  document.getElementById('loadingSection').style.display='none';
+  document.getElementById('dashboard').style.display='block';
+  document.getElementById('resetFabFixed').style.display='block';
+  document.getElementById('resetFab').style.display='inline-flex';
+  populateFilters();applyGlobalFilters();
+}
+
+function runDiagnostics(data){
+  const issues=[], warnings=[], info=[];
+  const totalRows=data.length;
+
+  // 1. Empty file
+  if(totalRows===0){issues.push({icon:'🚫',msg:'File has 0 data rows. Check if the file is empty or only has headers.'});return{issues,warnings,info,totalRows,sampleCols:[]}}
+
+  const sampleCols=Object.keys(data[0]||{});
+
+  // 2. Key columns check
+  const requiredCols={
+    'PH_IN_date':'Used for Month, Speed, Date filter',
+    'ekl_shipment_type':'Used for CONVERSION (DEL/RTO/OPEN)',
+    'shipment_current_status':'Used for CONVERSION status',
+    'First_OFD_date':'Used for FAC, TAT, Speed',
+    'Delivered_Date':'Used for FAC calculation',
+    'shipped_lpd_date':'Used for TAT (INTAT/BREACHED)',
+  };
+  const missingCols=Object.entries(requiredCols).filter(([col])=>!sampleCols.some(c=>c.trim()===col));
+  if(missingCols.length>0){
+    missingCols.forEach(([col,usage])=>issues.push({icon:'❌',msg:`Missing column: "${col}" — ${usage}`}));
+  }
+
+  // 3. PH_IN_date parse check
+  const phCol=sampleCols.find(c=>c.trim()==='PH_IN_date');
+  if(phCol){
+    const sample=data.slice(0,20).map(r=>r[phCol]).filter(Boolean);
+    const parsed=sample.filter(v=>parseDate(v)!==null);
+    if(sample.length>0&&parsed.length===0){
+      issues.push({icon:'📅',msg:`"PH_IN_date" values could not be parsed as dates. Sample value: "${sample[0]}". Expected format: MM/DD/YYYY or YYYY-MM-DD`});
+    } else if(parsed.length < sample.length){
+      warnings.push({icon:'⚠️',msg:`Some PH_IN_date values could not be parsed (${sample.length-parsed.length} of ${sample.length} sample). Sample: "${sample.find(v=>parseDate(v)===null)}"`});
+    }
+  }
+
+  // 4. CONVERSION check — how many have valid status
+  const withConv=data.filter(r=>r.CONVERSION&&r.CONVERSION!=='').length;
+  if(withConv===0){
+    issues.push({icon:'🔄',msg:'No rows produced a CONVERSION value (DEL/RTO/OPEN). Check "ekl_shipment_type" and "shipment_current_status" column values.'});
+  } else {
+    info.push({icon:'✅',msg:`CONVERSION calculated for ${withConv.toLocaleString()} of ${totalRows.toLocaleString()} rows`});
+  }
+
+  // 5. Blank key columns
+  const blankPH=data.filter(r=>!r.PH_IN_date||r.PH_IN_date==='' ).length;
+  if(blankPH>0) warnings.push({icon:'⚠️',msg:`${blankPH.toLocaleString()} rows have blank PH_IN_date — these won't appear in date filter or Month grouping`});
+
+  // 6. Speed/FAC/TAT coverage
+  const withSpeed=data.filter(r=>r.SPEED!==''&&r.SPEED!==null&&!isNaN(parseFloat(r.SPEED))).length;
+  const withFAC=data.filter(r=>r.FAC==='TRUE'||r.FAC==='FALSE').length;
+  const withTAT=data.filter(r=>r.TAT==='INTAT'||r.TAT==='BREACHED').length;
+  info.push({icon:'📊',msg:`Speed calculated: ${withSpeed.toLocaleString()} rows | FAC eligible: ${withFAC.toLocaleString()} rows | TAT evaluated: ${withTAT.toLocaleString()} rows`});
+
+  // 7. Column name whitespace issues
+  const spacyCols=sampleCols.filter(c=>c!==c.trim());
+  if(spacyCols.length>0) warnings.push({icon:'🔤',msg:`${spacyCols.length} column(s) have leading/trailing spaces in their names: ${spacyCols.map(c=>`"${c}"`).join(', ')}`});
+
+  return{issues,warnings,info,totalRows,sampleCols};
+}
+
+function showDiagModal(diag){
+  document.getElementById('loadingSection').style.display='none';
+  const overlay=document.getElementById('diagModal');
+  document.getElementById('diagRowCount').textContent=diag.totalRows.toLocaleString()+' rows detected';
+  document.getElementById('diagColList').textContent=diag.sampleCols.length>0?'Columns found: '+diag.sampleCols.join(', '):'No columns detected';
+
+  let html='';
+  diag.issues.forEach(i=>html+=`<div class="diag-row diag-error">${i.icon} ${i.msg}</div>`);
+  diag.warnings.forEach(i=>html+=`<div class="diag-row diag-warn">${i.icon} ${i.msg}</div>`);
+  diag.info.forEach(i=>html+=`<div class="diag-row diag-info">${i.icon} ${i.msg}</div>`);
+  document.getElementById('diagBody').innerHTML=html||'<div class="diag-row diag-info">✅ No issues found.</div>';
+
+  overlay.classList.add('active');
+}
+
+function closeDiagAndLoad(){
+  document.getElementById('diagModal').classList.remove('active');
+  launchDashboard();
+}
+
+function populateFilters(){
+  const monthOrder=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const months=[...new Set(rawData.map(r=>r.Month).filter(Boolean))].sort((a,b)=>monthOrder.indexOf(a)-monthOrder.indexOf(b));
+  const mSel=document.getElementById('monthFilter');
+  mSel.innerHTML='<option value="">All Months</option>';
+  months.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=m;mSel.appendChild(o)});
+
+  // Populate date dropdowns from PH_IN_date column only
+  const phDates=[...new Set(
+    rawData.map(r=>r.PH_IN_date).filter(Boolean).map(v=>{
+      const d=parseDate(v);return d?fmtDate(d):null;
+    }).filter(Boolean)
+  )].sort();
+
+  const fromSel=document.getElementById('dateFrom');
+  const toSel=document.getElementById('dateTo');
+  fromSel.innerHTML='<option value="">From Date</option>';
+  toSel.innerHTML='<option value="">To Date</option>';
+  phDates.forEach(dt=>{
+    const label=formatDateLabel(dt);
+    const o1=document.createElement('option');o1.value=dt;o1.textContent=label;fromSel.appendChild(o1);
+    const o2=document.createElement('option');o2.value=dt;o2.textContent=label;toSel.appendChild(o2);
+  });
+
+  const zones=[...new Set(rawData.map(r=>r._zone).filter(Boolean))].sort();
+  const zSel=document.getElementById('zoneFilter');
+  zSel.innerHTML='<option value="">All Zones</option>';
+  zones.forEach(z=>{const o=document.createElement('option');o.value=z;o.textContent=z;zSel.appendChild(o)});
+  const codes=[...new Set(rawData.map(r=>r.seller_type).filter(Boolean))].sort();
+  const cSel=document.getElementById('codeFilter');
+  cSel.innerHTML='<option value="">All Codes</option>';
+  codes.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;cSel.appendChild(o)});
+}
+
+function formatDateLabel(dateStr){
+  const d=new Date(dateStr);
+  return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+}
+
+function applyGlobalFilters(){
+  const dateFrom=document.getElementById('dateFrom').value;
+  const dateTo=document.getElementById('dateTo').value;
+  const pay=document.getElementById('payFilter').value;
+  const zone=document.getElementById('zoneFilter').value;
+  const code=document.getElementById('codeFilter').value;
+  const fromD=dateFrom?new Date(dateFrom):null;
+  const toD=dateTo?new Date(dateTo+'T23:59:59'):null;
+  const anyActive=dateFrom||dateTo||pay||zone||code;
+  document.getElementById('activeFilterBadge').style.display=anyActive?'inline-block':'none';
+  globalFiltered=rawData.filter(r=>{
+    if(fromD&&r._phDate&&r._phDate<fromD)return false;
+    if(toD&&r._phDate&&r._phDate>toD)return false;
+    if(pay&&r._payment!==pay)return false;
+    if(zone&&r._zone!==zone)return false;
+    if(code&&r.seller_type!==code)return false;
+    return true;
+  });
+  renderStats();renderBreakdowns();renderDeepDive();applyTidFilters();
+}
+
+function clearGlobalFilters(){
+  ['dateFrom','dateTo'].forEach(id=>{const el=document.getElementById(id);el.selectedIndex=0});
+  ['payFilter','zoneFilter','codeFilter'].forEach(id=>document.getElementById(id).value='');
+  applyGlobalFilters();
+}
+
+function pct(n,d){if(!d)return'0.0';return((n/d)*100).toFixed(1)}
+function pctN(n,d){if(!d)return 0;return+((n/d)*100).toFixed(1)}
+
+function makeBars(containerId,rows){
+  const el=document.getElementById(containerId);if(!el)return;
+  el.innerHTML=rows.map(r=>`
+    <div class="bar-row">
+      <div class="bar-lbl" title="${r.label}">${r.label}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:0%;background:${r.color}" data-w="${r.pct}"></div></div>
+      <div class="bar-val" style="color:${r.color}">${r.pct}%</div>
+    </div>
+    ${r.sub?`<div class="bar-sub">${r.sub}</div>`:''}`).join('');
+  setTimeout(()=>{el.querySelectorAll('.bar-fill').forEach(b=>{b.style.width=b.dataset.w+'%'})},50);
+}
+
+function renderStats(){
+  const d=globalFiltered,total=d.length;
+  const del=d.filter(r=>r.CONVERSION==='DEL').length;
+  const rto=d.filter(r=>r.CONVERSION==='RTO').length;
+  const open=d.filter(r=>r.CONVERSION==='OPEN').length;
+  const facTrue=d.filter(r=>r.FAC==='TRUE').length;
+  const facFalse=d.filter(r=>r.FAC==='FALSE').length;
+  const intat=d.filter(r=>r.TAT==='INTAT').length;
+  // Speed: only rows where First_OFD_date is NOT blank
+  const speeds = d
+    .filter(r => r.First_OFD_date && r.First_OFD_date.toString().trim() !== '' && r.SPEED !== '' && !isNaN(parseFloat(r.SPEED)) && parseFloat(r.SPEED) >= 0)
+    .map(r => parseFloat(r.SPEED));
+  const avgSpeed = speeds.length ? (speeds.reduce((a,b)=>a+b,0) / speeds.length).toFixed(1) : '—';
+  const speedEligible = speeds.length;
+  const cards=[
+    {cls:'c-total',icon:'📦',label:'Total',val:total.toLocaleString(),sub:'shipments',key:'total'},
+    {cls:'c-del',icon:'✅',label:'Delivered',val:pct(del,total)+'%',sub:`${del.toLocaleString()} orders`,key:'del'},
+    {cls:'c-rto',icon:'↩️',label:'RTO',val:pct(rto,total)+'%',sub:`${rto.toLocaleString()} orders`,key:'rto'},
+    {cls:'c-open',icon:'🔄',label:'Open',val:pct(open,total)+'%',sub:`${open.toLocaleString()} in-transit`,key:'open'},
+    {cls:'c-fac',icon:'⚡',label:'FAC',val:pct(facTrue,facTrue+facFalse)+'%',sub:`${facTrue.toLocaleString()} of ${(facTrue+facFalse).toLocaleString()}`,key:'fac'},
+    {cls:'c-tat',icon:'⏱️',label:'INTAT',val:pct(intat,total)+'%',sub:`${(total-intat).toLocaleString()} breached`,key:'intat'},
+    {cls:'c-speed',icon:'🚀',label:'Avg Speed',val:avgSpeed==='—'?'—':avgSpeed+' d',sub:`Avg of ${speeds.length.toLocaleString()} valid rows`,key:'speed'},
+  ];
+  document.getElementById('statsGrid').innerHTML=cards.map((c,i)=>`
+    <div class="stat-card ${c.cls}" style="animation:fadeUp .5s ${i*0.07}s ease both">
+      <div class="stat-icon">${c.icon}</div>
+      <div class="stat-label" onclick="showFormula('${c.key}')" title="Click to see formula">${c.label} ℹ️</div>
+      <div class="stat-value pop">${c.val}</div>
+      <div class="stat-sub">${c.sub}</div>
+    </div>`).join('');
+}
+
+function renderBreakdowns(){
+  const d=globalFiltered,total=d.length;
+  const del=d.filter(r=>r.CONVERSION==='DEL').length;
+  const rto=d.filter(r=>r.CONVERSION==='RTO').length;
+  const open=d.filter(r=>r.CONVERSION==='OPEN').length;
+  makeBars('convBars',[
+    {label:'DEL',pct:pctN(del,total),color:'var(--green)',sub:`${del.toLocaleString()} shipments`},
+    {label:'RTO',pct:pctN(rto,total),color:'var(--red)',sub:`${rto.toLocaleString()} shipments`},
+    {label:'OPEN',pct:pctN(open,total),color:'var(--yellow)',sub:`${open.toLocaleString()} in-transit`},
+  ]);
+  const monthOrder=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const colors=['var(--blue)','var(--green)','var(--yellow)','var(--purple)','#fb923c','var(--red)'];
+  const months=[...new Set(d.map(r=>r.Month).filter(Boolean))].sort((a,b)=>monthOrder.indexOf(a)-monthOrder.indexOf(b));
+  makeBars('monthBars',months.map((m,i)=>{
+    const md=d.filter(r=>r.Month===m);
+    const md_del=md.filter(r=>r.CONVERSION==='DEL').length;
+    return{label:m,pct:pctN(md_del,md.length),color:colors[i%colors.length],sub:`${md.length} total | ${pct(md_del,md.length)}% DEL`};
+  }));
+  const sellers=[...new Set(d.map(r=>r.ext_seller_name).filter(Boolean))];
+
+}
+
+function renderDeepDive(){
+  const d=globalFiltered;
+  renderPayment(d);renderZone(d);renderCity(d);renderPincodeData(d);
+  renderShipType(d);renderLznSpeed(d);renderTatAnalysis(d);renderSellerTable(d);
+  buildPHData(d);renderPHSummary();
+}
+
+function renderPayment(d){
+  const cod=d.filter(r=>r._payment==='COD');
+  const pre=d.filter(r=>r._payment==='PREPAID');
+  const total=d.length;
+  document.getElementById('paymentSplit').innerHTML=`
+    <div class="pay-block"><div class="pay-label">COD + POS</div><div class="pay-val" style="color:var(--yellow)">${pct(cod.length,total)}%</div><div class="pay-sub">${cod.length.toLocaleString()} shipments</div></div>
+    <div class="pay-block"><div class="pay-label">Prepaid</div><div class="pay-val" style="color:var(--blue)">${pct(pre.length,total)}%</div><div class="pay-sub">${pre.length.toLocaleString()} shipments</div></div>`;
+  makeBars('paymentBreakBars',[
+    {label:'COD DEL',pct:pctN(cod.filter(r=>r.CONVERSION==='DEL').length,cod.length),color:'var(--yellow)',sub:'DEL% within COD'},
+    {label:'PPD DEL',pct:pctN(pre.filter(r=>r.CONVERSION==='DEL').length,pre.length),color:'var(--blue)',sub:'DEL% within Prepaid'},
+    {label:'COD RTO',pct:pctN(cod.filter(r=>r.CONVERSION==='RTO').length,cod.length),color:'var(--red)',sub:'RTO% within COD'},
+    {label:'PPD RTO',pct:pctN(pre.filter(r=>r.CONVERSION==='RTO').length,pre.length),color:'#f97316',sub:'RTO% within Prepaid'},
+  ]);
+}
+
+function renderZone(d){
+  const zones=[...new Set(d.map(r=>r._zone).filter(Boolean))].sort();
+  const metric=(document.getElementById('zoneMetric')||{}).value||'table';
+  const tableWrap=document.getElementById('zoneTableWrap');
+  const speedWrap=document.getElementById('zoneSpeedWrap');
+
+  if(metric==='speed'){
+    tableWrap.style.display='none';
+    speedWrap.style.display='block';
+    const zoneSpeedData=zones.map(z=>{
+      const zd=d.filter(r=>r._zone===z);
+      // Only rows where First_OFD_date is NOT blank
+      const speeds=zd
+        .filter(r=>r.First_OFD_date&&r.First_OFD_date.toString().trim()!==''&&r.SPEED!==''&&!isNaN(parseFloat(r.SPEED))&&parseFloat(r.SPEED)>=0)
+        .map(r=>parseFloat(r.SPEED));
+      const avg=speeds.length?(speeds.reduce((a,b)=>a+b,0)/speeds.length):null;
+      return{zone:z,avg,count:zd.length,validCount:speeds.length};
+    }).filter(z=>z.avg!==null);
+    const maxAvg=Math.max(...zoneSpeedData.map(z=>z.avg),0.1);
+    const rows=zoneSpeedData.sort((a,b)=>b.avg-a.avg).map(z=>{
+      const color=z.avg<=1?'var(--green)':z.avg<=2?'var(--yellow)':z.avg<=3?'var(--orange)':'var(--red)';
+      return{label:z.zone,pct:+((z.avg/maxAvg)*100).toFixed(1),color,sub:`Avg ${z.avg.toFixed(1)} days | ${z.validCount} of ${z.count} rows with OFD`};
+    });
+    makeBars('zoneSpeedBars',rows);
+  } else {
+    tableWrap.style.display='block';
+    speedWrap.style.display='none';
+    const tbody=document.querySelector('#zoneTable tbody');
+    tbody.innerHTML=zones.map(z=>{
+      const zd=d.filter(r=>r._zone===z);
+      const zdel=zd.filter(r=>r.CONVERSION==='DEL').length;
+      const zrto=zd.filter(r=>r.CONVERSION==='RTO').length;
+      const zfac=zd.filter(r=>r.FAC==='TRUE').length;
+      const zintat=zd.filter(r=>r.TAT==='INTAT').length;
+      // Only rows where First_OFD_date is NOT blank
+      const speeds=zd
+        .filter(r=>r.First_OFD_date&&r.First_OFD_date.toString().trim()!==''&&r.SPEED!==''&&!isNaN(parseFloat(r.SPEED))&&parseFloat(r.SPEED)>=0)
+        .map(r=>parseFloat(r.SPEED));
+      const avgSpd=speeds.length?(speeds.reduce((a,b)=>a+b,0)/speeds.length).toFixed(1):'—';
+      const spdColor=avgSpd==='—'?'var(--muted)':+avgSpd<=1?'var(--green)':+avgSpd<=2?'var(--yellow)':+avgSpd<=3?'var(--orange)':'var(--red)';
+      return`<tr>
+        <td style="color:var(--text);font-weight:700">${z}</td>
+        <td>${zd.length}</td>
+        <td style="color:var(--green)">${pct(zdel,zd.length)}%</td>
+        <td style="color:var(--red)">${pct(zrto,zd.length)}%</td>
+        <td style="color:var(--blue)">${pct(zfac,zdel)}%</td>
+        <td style="color:var(--purple)">${pct(zintat,zd.length)}%</td>
+        <td style="color:${spdColor};font-weight:700">${avgSpd}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+function renderCity(d){
+  const cityMap={};
+  d.forEach(r=>{const c=r.destination_city||r.dh_city||'';if(!c)return;if(!cityMap[c])cityMap[c]={total:0,del:0,rto:0,fac:0,facDen:0};cityMap[c].total++;if(r.CONVERSION==='DEL')cityMap[c].del++;if(r.CONVERSION==='RTO')cityMap[c].rto++;if(r.FAC==='TRUE')cityMap[c].fac++;if(r.FAC==='TRUE'||r.FAC==='FALSE')cityMap[c].facDen++});
+  const metric=(document.getElementById('cityMetric')||{}).value||'overall';
+  const allCities=Object.entries(cityMap).filter(([,v])=>v.total>=1);
+  let sorted;
+  if(metric==='del')sorted=allCities.sort((a,b)=>(b[1].del/b[1].total)-(a[1].del/a[1].total));
+  else if(metric==='rto')sorted=allCities.sort((a,b)=>(b[1].rto/b[1].total)-(a[1].rto/a[1].total));
+  else if(metric==='fac')sorted=allCities.sort((a,b)=>(b[1].fac/(b[1].facDen||1))-(a[1].fac/(a[1].facDen||1)));
+  else sorted=allCities.sort((a,b)=>b[1].total-a[1].total);
+  const tbody=document.getElementById('cityTableBody');if(!tbody)return;
+  tbody.innerHTML=sorted.slice(0,10).map(([city,v])=>`<tr><td style="color:var(--text);font-weight:700">${city.substring(0,16)}</td><td>${v.total}</td><td style="color:var(--green);font-weight:700">${pct(v.del,v.total)}%</td><td style="color:var(--red)">${pct(v.rto,v.total)}%</td><td style="color:var(--blue)">${pct(v.fac,v.facDen)}%</td></tr>`).join('');
+}
+
+function renderPincodeData(d){
+  const pcMap={};
+  d.forEach(r=>{const pc=r.Dest_pincode||r.source_pincode||'';if(!pc)return;if(!pcMap[pc])pcMap[pc]={total:0,del:0,rto:0,open:0,fac:0};pcMap[pc].total++;if(r.CONVERSION==='DEL')pcMap[pc].del++;else if(r.CONVERSION==='RTO')pcMap[pc].rto++;else pcMap[pc].open++;if(r.FAC==='TRUE')pcMap[pc].fac++});
+  pincodeData=Object.entries(pcMap).sort((a,b)=>b[1].total-a[1].total);
+  renderPincodeTable();
+}
+
+function renderPincodeTable(){
+  const search=(document.getElementById('pincodeSearch').value||'').toLowerCase();
+  const rows=pincodeData.filter(([pc])=>!search||pc.toString().includes(search)).slice(0,15);
+  document.querySelector('#pincodeTable tbody').innerHTML=rows.map(([pc,v])=>`<tr><td style="color:var(--text);font-weight:700">${pc}</td><td>${v.total}</td><td style="color:var(--green)">${pct(v.del,v.total)}%</td><td style="color:var(--red)">${pct(v.rto,v.total)}%</td><td style="color:var(--blue)">${pct(v.fac,v.del)}%</td><td style="color:var(--yellow)">${v.open}</td></tr>`).join('');
+}
+
+function renderSellerTable(d){
+  const sellers=[...new Set(d.map(r=>r.ext_seller_name).filter(Boolean))];
+  const metric=(document.getElementById('sellerMetricFilter')||{}).value||'del';
+  const tbody=document.querySelector('#sellerTable tbody');if(!tbody)return;
+  const sellerData=sellers.map(s=>{
+    const sd=d.filter(r=>r.ext_seller_name===s);
+    return{name:s,total:sd.length,del:sd.filter(r=>r.CONVERSION==='DEL').length,rto:sd.filter(r=>r.CONVERSION==='RTO').length,fac:sd.filter(r=>r.FAC==='TRUE').length,intat:sd.filter(r=>r.TAT==='INTAT').length};
+  });
+  const sorted=metric==='volume'?sellerData.sort((a,b)=>b.total-a.total):metric==='rto'?sellerData.sort((a,b)=>(b.rto/b.total)-(a.rto/a.total)):sellerData.sort((a,b)=>(b.del/b.total)-(a.del/a.total));
+  tbody.innerHTML=sorted.slice(0,10).map(s=>`<tr><td style="color:var(--text);font-weight:700;max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${s.name}">${s.name.substring(0,18)}</td><td>${s.total}</td><td style="color:var(--green)">${pct(s.del,s.total)}%</td><td style="color:var(--red)">${pct(s.rto,s.total)}%</td><td style="color:var(--blue)">${pct(s.fac,s.del)}%</td><td style="color:var(--purple)">${pct(s.intat,s.total)}%</td></tr>`).join('');
+}
+
+function renderLznSpeed(d){
+  // Use ekl_fin_zone — matches your pivot table zones (JK_NE, LOCAL, METRO, ROI, ZONAL)
+  const zoneKey = 'ekl_fin_zone';
+  const dbg = document.getElementById('lznDebug');
+
+  const zones = [...new Set(d.map(r=>r[zoneKey]).filter(v=>v&&v.toString().trim()!==''))].sort();
+  const monthOrder = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const months = [...new Set(d.map(r=>r.Month).filter(Boolean))].sort((a,b)=>monthOrder.indexOf(a)-monthOrder.indexOf(b));
+
+  if(dbg) dbg.textContent = `Column: "${zoneKey}" | Zones: ${zones.join(', ')||'none'} | Months: ${months.join(', ')||'none'}`;
+
+  // Helper: avg speed for a subset
+  function avgSpd(rows){
+    const speeds = rows.filter(r=>
+      r.First_OFD_date && r.First_OFD_date.toString().trim()!=='' &&
+      r.SPEED !== '' && !isNaN(parseFloat(r.SPEED)) && parseFloat(r.SPEED) >= 0
+    ).map(r=>parseFloat(r.SPEED));
+    return speeds.length ? (speeds.reduce((a,b)=>a+b,0)/speeds.length) : null;
+  }
+
+  // ── Bar chart: one bar per zone, overall avg ──
+  const barsEl = document.getElementById('lznSpeedBars');
+  const zoneAvgs = zones.map(z=>({z, avg:avgSpd(d.filter(r=>r[zoneKey]===z))})).filter(x=>x.avg!==null);
+  const maxAvg = Math.max(...zoneAvgs.map(x=>x.avg), 0.1);
+
+  if(barsEl){
+    if(zoneAvgs.length===0){
+      barsEl.innerHTML=`<div style="color:var(--muted);font-size:11px;padding:8px">No speed data — check ekl_fin_zone & First_OFD_date columns</div>`;
+    } else {
+      barsEl.innerHTML = zoneAvgs.sort((a,b)=>b.avg-a.avg).map(x=>`
+        <div class="bar-row">
+          <div class="bar-lbl" title="${x.z}">${x.z}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:0%;background:var(--orange)" data-w="${+((x.avg/maxAvg)*100).toFixed(1)}"></div></div>
+          <div class="bar-val" style="color:var(--orange)">${x.avg.toFixed(1)}</div>
+        </div>`).join('');
+      setTimeout(()=>{barsEl.querySelectorAll('.bar-fill').forEach(b=>{b.style.width=b.dataset.w+'%'})},50);
+    }
+  }
+
+  // ── Table: Zone × Month (like Image 1 pivot) ──
+  const tbody = document.getElementById('lznSpeedBody');
+  if(!tbody) return;
+
+  if(zones.length===0){
+    tbody.innerHTML=`<tr><td colspan="20" style="text-align:center;color:var(--muted);padding:18px">No ekl_fin_zone data found</td></tr>`;
+    return;
+  }
+
+  // Rebuild table header dynamically with months
+  const thead = document.querySelector('#lznSpeedTable thead tr');
+  if(thead){
+    thead.innerHTML = `<th>Zone</th>`
+      + months.map(m=>`<th>${m}</th>`).join('')
+      + `<th style="color:var(--gold2)">Grand Total</th>`;
+  }
+
+  tbody.innerHTML = zones.map(z=>{
+    const zRows = d.filter(r=>r[zoneKey]===z);
+    const monthCells = months.map(m=>{
+      const mRows = zRows.filter(r=>r.Month===m);
+      const avg = avgSpd(mRows);
+      return `<td style="font-weight:600;color:var(--text2)">${avg!==null?avg.toFixed(1):'—'}</td>`;
+    }).join('');
+    const grandAvg = avgSpd(zRows);
+    return `<tr>
+      <td style="color:var(--gold2);font-weight:700">${z}</td>
+      ${monthCells}
+      <td style="color:var(--orange);font-weight:700">${grandAvg!==null?grandAvg.toFixed(1):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  // Grand Total row
+  const grandRow = `<tr style="border-top:1px solid var(--gold);background:rgba(201,168,76,0.06)">
+    <td style="color:var(--gold2);font-weight:700">Grand Total</td>
+    ${months.map(m=>{
+      const avg=avgSpd(d.filter(r=>r.Month===m));
+      return`<td style="font-weight:700;color:var(--text)">${avg!==null?avg.toFixed(1):'—'}</td>`;
+    }).join('')}
+    <td style="color:var(--orange);font-weight:700">${(avgSpd(d)||0).toFixed(1)}</td>
+  </tr>`;
+  tbody.innerHTML += grandRow;
+}
+
+function renderShipType(d){
+  const types=[...new Set(d.map(r=>r.ekl_shipment_type).filter(Boolean))];
+  const colors=['var(--blue)','var(--green)','var(--yellow)','var(--purple)','#fb923c'];
+  const total=d.length;
+  makeBars('shipTypeBars',types.map((t,i)=>{
+    const td=d.filter(r=>r.ekl_shipment_type===t);
+    return{label:t.substring(0,16),pct:pctN(td.length,total),color:colors[i%colors.length],sub:`${td.length} shipments`};
+  }));
+}
+
+function renderTatAnalysis(d){
+  const total=d.length;
+  const intat=d.filter(r=>r.TAT==='INTAT').length;
+  const breached=d.filter(r=>r.TAT==='BREACHED').length;
+  const zones=[...new Set(d.map(r=>r._zone).filter(Boolean))].sort();
+  const rows=zones.map(z=>{
+    const zd=d.filter(r=>r._zone===z);
+    const zi=zd.filter(r=>r.TAT==='INTAT').length;
+    return{label:z,pct:pctN(zi,zd.length),color:'var(--purple)',sub:`${pct(zi,zd.length)}% INTAT | ${zd.length} total`};
+  });
+  makeBars('tatBars',[
+    {label:'INTAT',pct:pctN(intat,total),color:'var(--green)',sub:`${intat} on time`},
+    {label:'BREACHED',pct:pctN(breached,total),color:'var(--red)',sub:`${breached} late`},
+    ...rows
+  ]);
+}
+
+function applyTidFilters(){
+  const search=document.getElementById('searchInput').value.toLowerCase();
+  const conv=document.getElementById('convFilter').value;
+  const tat=document.getElementById('tatFilter').value;
+  const fac=document.getElementById('facFilter').value;
+  const month=document.getElementById('monthFilter').value;
+  tidFiltered=globalFiltered.filter(r=>{
+    if(search&&!((r.vendor_tracking_id||'').toLowerCase().includes(search)||(r.ext_seller_name||'').toLowerCase().includes(search)))return false;
+    if(conv&&r.CONVERSION!==conv)return false;
+    if(tat&&r.TAT!==tat)return false;
+    if(fac&&r.FAC!==fac)return false;
+    if(month&&r.Month!==month)return false;
+    return true;
+  });
+  currentPage=1;
+  document.getElementById('recordCount').textContent=`${tidFiltered.length.toLocaleString()} records`;
+  renderTable();
+}
+
+function sortTable(col){
+  if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=1}
+  tidFiltered.sort((a,b)=>(a[col]||'').toString().localeCompare((b[col]||'').toString())*sortDir);
+  renderTable();
+}
+
+function renderTable(){
+  const start=(currentPage-1)*PAGE_SIZE;
+  const page=tidFiltered.slice(start,start+PAGE_SIZE);
+  document.getElementById('tableBody').innerHTML=page.map(r=>{
+    const conv=r.CONVERSION||'',fac=r.FAC||'',tat=r.TAT||'';
+    return`<tr>
+      <td>${r.vendor_tracking_id||'-'}</td>
+      <td style="color:var(--text)">${r.ext_seller_name||'-'}</td>
+      <td>${r.Month||'-'}</td>
+      <td><span class="badge badge-${conv.toLowerCase()}">${conv||'-'}</span></td>
+      <td><span class="badge badge-${fac==='TRUE'?'true':'false'}">${fac==='TRUE'?'✓ FAC':fac==='FALSE'?'✗':'—'}</span></td>
+      <td><span class="badge badge-${tat.toLowerCase()}">${tat||'—'}</span></td>
+      <td style="text-align:center">${r.SPEED!==''?r.SPEED:'-'}</td>
+      <td><span class="badge" style="background:rgba(255,201,77,0.1);color:var(--yellow)">${r._payment||'-'}</span></td>
+      <td>${r._zone||'-'}</td>
+      <td>${r.Dest_pincode||'-'}</td>
+      <td>${r.destination_city||'-'}</td>
+      <td>${r.PH_IN_date||'-'}</td>
+      <td>${r.First_OFD_date||'-'}</td>
+      <td>${r.shipped_lpd_date||'-'}</td>
+      <td>${r.Delivered_Date||'-'}</td>
+    </tr>`;
+  }).join('');
+  const total=tidFiltered.length,totalPages=Math.ceil(total/PAGE_SIZE);
+  document.getElementById('pageInfo').textContent=`${start+1}–${Math.min(start+PAGE_SIZE,total)} of ${total.toLocaleString()}`;
+  let btns=`<button class="pg-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>←</button>`;
+  const range=[...new Set([1,currentPage-1,currentPage,currentPage+1,totalPages].filter(p=>p>=1&&p<=totalPages))].sort((a,b)=>a-b);
+  range.forEach(p=>{btns+=`<button class="pg-btn ${p===currentPage?'active':''}" onclick="goPage(${p})">${p}</button>`});
+  btns+=`<button class="pg-btn" onclick="goPage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>→</button>`;
+  document.getElementById('pageBtns').innerHTML=btns;
+}
+
+function goPage(p){
+  const total=Math.ceil(tidFiltered.length/PAGE_SIZE);
+  if(p<1||p>total)return;
+  currentPage=p;renderTable();
+  document.querySelector('.table-section').scrollIntoView({behavior:'smooth'});
+}
+
+function buildPHData(d){
+  const phMap={};
+  d.forEach(r=>{
+    const name=(r.ph_name||r.PH_name||'').trim();
+    const city=(r.ph_city||r.PH_city||'').trim();
+    const inDate=parseDate(r.PH_IN_date);
+    const outDate=parseDate(r.PH_OUT_date||r.ph_out_date||r.PH_OUT||'');
+    if(!name)return;
+    if(!phMap[name])phMap[name]={name,city,total:0,days:[],totalDays:0,d1:0,d2:0,d3:0,d4:0,d5plus:0,maxDays:0};
+    phMap[name].total++;
+    if(city&&!phMap[name].city)phMap[name].city=city;
+    if(inDate&&outDate){
+      const diff=Math.round((outDate-inDate)/86400000);
+      if(diff>=0){phMap[name].days.push(diff);phMap[name].totalDays+=diff;if(diff<=1)phMap[name].d1++;else if(diff===2)phMap[name].d2++;else if(diff===3)phMap[name].d3++;else if(diff===4)phMap[name].d4++;else phMap[name].d5plus++;if(diff>phMap[name].maxDays)phMap[name].maxDays=diff}
+    }
+  });
+  phData=Object.values(phMap).sort((a,b)=>{const aa=a.days.length?a.totalDays/a.days.length:0;const bb=b.days.length?b.totalDays/b.days.length:0;return bb-aa});
+}
+
+function renderPHSummary(){
+  const nameSearch=(document.getElementById('phNameFilter')?.value||'').toLowerCase();
+  const citySearch=(document.getElementById('phCityFilter')?.value||'').toLowerCase();
+  const filtered=phData.filter(p=>(!nameSearch||p.name.toLowerCase().includes(nameSearch))&&(!citySearch||p.city.toLowerCase().includes(citySearch))).slice(0,10);
+  const tbody=document.getElementById('phTableBody');if(!tbody)return;
+  if(filtered.length===0){tbody.innerHTML=`<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:24px">No PH data — check if ph_name / PH_OUT_date columns exist</td></tr>`;return}
+  tbody.innerHTML=filtered.map(p=>{
+    const avg=p.days.length?(p.totalDays/p.days.length).toFixed(1):'—';
+    const avgColor=p.days.length?(+avg<=1?'var(--green)':+avg<=2?'var(--yellow)':+avg<=3?'var(--orange)':'var(--red)'):'var(--muted)';
+    return`<tr><td style="color:var(--gold2);font-weight:700">${p.name.substring(0,20)}</td><td>${p.city||'—'}</td><td>${p.total}</td><td style="color:${avgColor};font-weight:700">${avg} days</td><td style="color:var(--green)">${p.d1}</td><td style="color:var(--yellow)">${p.d2}</td><td style="color:var(--orange)">${p.d3}</td><td style="color:var(--red)">${p.d4}</td><td style="color:var(--red);font-weight:700">${p.d5plus}</td><td style="color:var(--muted2)">${p.maxDays||'—'}</td></tr>`;
+  }).join('');
+}
+
+function exportCSV(type){
+  let rows=[];
+  if(type==='summary'){
+    const d=globalFiltered,total=d.length;
+    const del=d.filter(r=>r.CONVERSION==='DEL').length,rto=d.filter(r=>r.CONVERSION==='RTO').length,open=d.filter(r=>r.CONVERSION==='OPEN').length;
+    const facTrue=d.filter(r=>r.FAC==='TRUE').length,facFalse=d.filter(r=>r.FAC==='FALSE').length;
+    const intat=d.filter(r=>r.TAT==='INTAT').length;
+    const speeds=d.map(r=>parseFloat(r.SPEED)).filter(v=>!isNaN(v)&&v>=0);
+    const avgSpd=speeds.length?(speeds.reduce((a,b)=>a+b,0)/speeds.length).toFixed(2):'';
+    rows=[['Metric','Count','Percentage'],['Total',total,'100%'],['DEL',del,pct(del,total)+'%'],['RTO',rto,pct(rto,total)+'%'],['Open',open,pct(open,total)+'%'],['FAC',facTrue,pct(facTrue,facTrue+facFalse)+'%'],['INTAT',intat,pct(intat,total)+'%'],['Avg Speed',avgSpd,'days']];
+    dlCSV(rows,'ekdash_summary.csv');
+  }else if(type==='tid'){
+    const cols=['vendor_tracking_id','ext_seller_name','Month','CONVERSION','FAC','TAT','SPEED','_payment','ekl_fin_zone','Dest_pincode','destination_city','shipment_current_status','PH_IN_date','First_OFD_date','shipped_lpd_date','Delivered_Date'];
+    const hdrs=['TID','Seller','Month','Conversion','FAC','TAT','Speed','Payment','Zone','Pincode','Dest City','Status','PH IN','First OFD','LPD','Delivered'];
+    dlCSV([hdrs,...tidFiltered.map(r=>cols.map(c=>r[c]??''))],'ekdash_tid_level.csv');
+  }else if(type==='pincode'){
+    rows=[['Pincode','Total','DEL','RTO','Open','FAC','DEL%','RTO%','FAC%'],...pincodeData.map(([pc,v])=>[pc,v.total,v.del,v.rto,v.open,v.fac,pct(v.del,v.total)+'%',pct(v.rto,v.total)+'%',pct(v.fac,v.del)+'%'])];
+    dlCSV(rows,'ekdash_pincode.csv');
+  }
+}
+
+function dlCSV(rows,filename){
+  const csv=rows.map(r=>r.map(v=>`"${(v??'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=filename;a.click();
+}
+
+function exportExcel(){
+  const wb=XLSX.utils.book_new();
+  const d=globalFiltered,total=d.length;
+  const del=d.filter(r=>r.CONVERSION==='DEL').length,rto=d.filter(r=>r.CONVERSION==='RTO').length,open=d.filter(r=>r.CONVERSION==='OPEN').length;
+  const facTrue=d.filter(r=>r.FAC==='TRUE').length,facFalse=d.filter(r=>r.FAC==='FALSE').length;
+  const intat=d.filter(r=>r.TAT==='INTAT').length;
+  const speeds=d.map(r=>parseFloat(r.SPEED)).filter(v=>!isNaN(v)&&v>=0);
+  const avgSpd=speeds.length?+(speeds.reduce((a,b)=>a+b,0)/speeds.length).toFixed(2):'';
+  const s1=[['EkDash Report','',''],['Generated',new Date().toLocaleString(),''],['','',''],['Metric','Count','Percentage'],['Total',total,'100%'],['DEL',del,pct(del,total)+'%'],['RTO',rto,pct(rto,total)+'%'],['Open',open,pct(open,total)+'%'],['FAC',facTrue,pct(facTrue,facTrue+facFalse)+'%'],['INTAT',intat,pct(intat,total)+'%'],['Avg Speed',avgSpd,'']];
+  const ws1=XLSX.utils.aoa_to_sheet(s1);ws1['!cols']=[{wch:30},{wch:15},{wch:20}];
+  XLSX.utils.book_append_sheet(wb,ws1,'Summary');
+  const cols=['vendor_tracking_id','ext_seller_name','Month','CONVERSION','FAC','TAT','SPEED','_payment','_zone','Dest_pincode','destination_city','shipment_current_status','PH_IN_date','First_OFD_date','shipped_lpd_date','Delivered_Date'];
+  const hdrs=['TID','Seller','Month','Conversion','FAC','TAT','Speed','Payment','Zone','Pincode','Dest City','Status','PH IN','First OFD','LPD','Delivered'];
+  const ws2=XLSX.utils.aoa_to_sheet([hdrs,...d.map(r=>cols.map(c=>r[c]??''))]);
+  ws2['!autofilter']={ref:'A1:P1'};XLSX.utils.book_append_sheet(wb,ws2,'TID Level');
+  const s3=[['Pincode','Total','DEL%','RTO%','FAC%'],...pincodeData.map(([pc,v])=>[pc,v.total,pct(v.del,v.total)+'%',pct(v.rto,v.total)+'%',pct(v.fac,v.del)+'%'])];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(s3),'Pincode');
+  XLSX.writeFile(wb,'ekdash_report.xlsx');
+}
+
+const FORMULAS = {
+  total: {
+    icon:'📦', title:'Total Shipments',
+    subtitle:'METRIC DEFINITION',
+    formula:'Total = COUNT( all rows in filtered dataset )',
+    desc:'Counts every shipment record present after applying dashboard filters (date range, payment type, zone, seller code). This is the denominator used for all percentage calculations.',
+    example:'Example: If your CSV has 1,200 rows and date filter reduces to 800 → Total = 800'
+  },
+  del: {
+    icon:'✅', title:'DEL % — Delivery Rate',
+    subtitle:'CONVERSION FORMULA',
+    formula:'DEL % = (Delivered Shipments ÷ Total Shipments) × 100\n\nDelivered when:\n  ekl_shipment_type = "forward"\n  AND shipment_current_status IN\n  ["delivered", "delivery_update", "delivered_update"]',
+    desc:'Percentage of forward shipments that were successfully delivered to the customer. Only shipments with type "forward" and a delivered status are counted.',
+    example:'Example: 900 delivered out of 1,200 total → DEL % = 75.0%'
+  },
+  rto: {
+    icon:'↩️', title:'RTO % — Return to Origin Rate',
+    subtitle:'CONVERSION FORMULA',
+    formula:'RTO % = (RTO Shipments ÷ Total Shipments) × 100\n\nRTO when:\n  ekl_shipment_type = "approved_rto"\n  OR shipment_current_status = "approved_rto"',
+    desc:'Percentage of shipments returned to the origin/seller. A high RTO % indicates delivery failures — useful to track by zone, city or seller.',
+    example:'Example: 180 RTO out of 1,200 total → RTO % = 15.0%'
+  },
+  open: {
+    icon:'🔄', title:'Open % — In-Transit Rate',
+    subtitle:'CONVERSION FORMULA',
+    formula:'OPEN % = (Open Shipments ÷ Total Shipments) × 100\n\nOpen when:\n  ekl_shipment_type = "forward"\n  AND status is NOT delivered\n  AND NOT approved_rto',
+    desc:'Shipments that are still in transit — neither delivered nor returned. Represents the "pending" bucket. Ideally this should be low for older date ranges.',
+    example:'Example: 120 open out of 1,200 total → OPEN % = 10.0%'
+  },
+  fac: {
+    icon:'⚡', title:'FAC % — First Attempt Conversion',
+    subtitle:'FAC FORMULA',
+    formula:'FAC % = (FAC Shipments ÷ FAC-Eligible Shipments) × 100\n\nFAC = TRUE when:\n  DATE(First_OFD_date) = DATE(Delivered_Date)\n\nEligible = rows where both\n  First_OFD_date AND Delivered_Date exist',
+    desc:'Measures how many deliveries were completed on the very first out-for-delivery (OFD) attempt. Calculated only for shipments where both OFD date and delivery date are available.',
+    example:'Example: OFD on 01-Jan, Delivered 01-Jan → FAC ✓\nOFD on 01-Jan, Delivered 03-Jan → FAC ✗'
+  },
+  intat: {
+    icon:'⏱️', title:'INTAT % — In-TAT Delivery Rate',
+    subtitle:'TAT FORMULA',
+    formula:'INTAT % = (INTAT Shipments ÷ Total Shipments) × 100\n\nINTAT when:\n  First_OFD_date ≤ shipped_lpd_date\n\nBREACHED when:\n  First_OFD_date > shipped_lpd_date\n\nIf OFD missing but LPD exists:\n  Use rto_created_date or today vs LPD',
+    desc:'Measures what percentage of shipments were delivered within the committed SLA date (LPD = Last Promise Date). INTAT means delivery happened on or before the LPD.',
+    example:'Example: LPD = 05-Jan, OFD = 04-Jan → INTAT ✓\nLPD = 05-Jan, OFD = 07-Jan → BREACHED ✗'
+  },
+  speed: {
+    icon:'🚀', title:'Avg Speed — PH-IN to First OFD',
+    subtitle:'SPEED FORMULA',
+    formula:'Speed (days) = First_OFD_date − PH_IN_date\n\nAvg Speed = SUM(Speed of valid rows)\n             ÷ COUNT(valid rows)\n\nValid row = First_OFD_date is NOT blank\n            AND both dates can be parsed\n            AND result ≥ 0',
+    desc:'Measures average days a shipment stays in the Processing Hub before first Out-For-Delivery attempt. Rows where First_OFD_date is blank are completely excluded from both numerator and denominator.',
+    example:'Example:\n  PH_IN=01-Jan, OFD=03-Jan → Speed=2 ✓\n  PH_IN=01-Jan, OFD=blank  → Skipped ✗\n  PH_IN=01-Jan, OFD=01-Jan → Speed=0 ✓\n\n  Avg of [2, 0, 1, 3] = 1.5 days'
+  }
+};
+
+function showFormula(key){
+  const f=FORMULAS[key];if(!f)return;
+  document.getElementById('modalIcon').textContent=f.icon;
+  document.getElementById('modalTitle').textContent=f.title;
+  document.getElementById('modalSubtitle').textContent=f.subtitle;
+  document.getElementById('modalFormula').textContent=f.formula;
+  document.getElementById('modalDesc').textContent=f.desc;
+  document.getElementById('modalExample').textContent=f.example;
+  document.getElementById('formulaModal').classList.add('active');
+}
+function closeModal(e){
+  if(e.target.id==='formulaModal')document.getElementById('formulaModal').classList.remove('active');
+}
+
+function resetTool(){
+  rawData=[];globalFiltered=[];tidFiltered=[];pincodeData=[];phData=[];
+  document.getElementById('uploadSection').style.display='block';
+  document.getElementById('dashboard').style.display='none';
+  document.getElementById('resetFabFixed').style.display='none';
+  document.getElementById('resetFab').style.display='none';
+  document.getElementById('headerFile').textContent='No file loaded';
+  document.getElementById('headerFile').classList.remove('loaded');
+  document.getElementById('fileInput').value='';
+}
+</script>
+</body>
+</html>
